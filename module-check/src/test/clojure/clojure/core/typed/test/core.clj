@@ -54,7 +54,9 @@
 ; is less useful here.
   (:use [clojure.core.typed :as tc :exclude [Seqable loop fn defprotocol let dotimes
                                              for doseq def remove filter defn atom ref]])
-  (:import (clojure.lang ISeq IPersistentVector Atom IPersistentMap
+  (:import (clojure.lang ISeq IPersistentVector Atom IPersistentMap ITransientMap 
+                         ITransientSet ITransientCollection ITransientAssociative
+                         ATransientMap ATransientSet ITransientVector IEditableCollection
                          ExceptionInfo Var Seqable)))
 
 ;Aliases used in unit tests
@@ -808,7 +810,6 @@
                       -empty))))
          
 
-
 (deftest check-get-keyword-invoke-test
   ;truth valued key
   (is-clj (= (tc-t (let [a {:a 1}]
@@ -1094,6 +1095,44 @@
 
 (deftest hmap-subtype
   (is-tc-e {} (clojure.lang.APersistentMap Any Any)))
+
+(deftest transient-collection-test
+  (is-tc-e (transient []) (clojure.lang.ITransientVector Any))
+  (is-tc-e (transient [1 2 3]) (clojure.lang.ITransientVector Number))
+  (is-tc-e (transient #{}) (clojure.lang.ITransientSet Any))
+  (is-tc-e (transient #{1 2}) (clojure.lang.ITransientSet Number))
+  (is-tc-e (transient {}) (clojure.lang.ITransientMap Any Any))
+  ;(is-tc-e (transient (sorted-set 4 3 1 2)) (clojure.lang.ITransientSet Number))
+  (is-tc-e (transient (hash-set 1 2 1 2)) (clojure.lang.ITransientSet Number))
+  (is-tc-e (transient {:a "a" :b "b" :c "c"}) (clojure.lang.ITransientMap Keyword String))
+  (is-tc-e (transient {1 "a" 2 "b"}) (clojure.lang.ATransientMap Number String)))
+
+(deftest assoc!-test
+  (is-tc-e (assoc! (transient {}) :a 1) (clojure.lang.ITransientMap Keyword Number))
+  (is-tc-e (assoc! (transient {"a" 1}) "b" 2) (clojure.lang.ITransientMap String Number))
+  (is-tc-e (assoc! (transient [1 2 3]) 0 10) (clojure.lang.ITransientVector Number))
+  (is-tc-err (assoc! (transient [1 2 3] 4 10)) (clojure.lang.ITransientVector Number)))
+
+(deftest dissoc!-test
+  (is-tc-e (dissoc! (transient {}) :a) (clojure.lang.ITransientMap Any Any))
+  (is-tc-e (dissoc! (transient {:a 1 :b 2}) :a) (clojure.lang.ITransientMap Keyword Number)))
+
+(deftest disj!-test
+  (is-tc-e (disj! (transient #{'a 'b 'c}) 'c) (clojure.lang.ITransientSet Symbol))
+  (is-tc-e (disj! (transient #{1 2 3}) 3) (clojure.lang.ITransientSet Number)))
+
+(deftest persistent!-test
+  (is-tc-e (persistent! (transient {:a 1 :b 2 :c 3})) (clojure.lang.IPersistentMap Keyword Number))
+  (is-tc-e (persistent! (transient {"a" 1 "b" 2})) (clojure.lang.IPersistentMap String Number)))
+
+(deftest conj!-test
+  (is-tc-e (conj! (transient [1 2 3]) 4) (clojure.lang.ITransientVector Number))
+  (is-tc-e (conj! (transient {1 2 3 4}) [5 6]) (clojure.lang.ITransientMap Number Number))
+  (is-tc-e (conj! (transient #{1 2 3}) 4) (clojure.lang.ITransientSet Number)))
+
+(deftest pop!-test
+  (is-tc-e (pop! (transient [1 2 3])) (clojure.lang.ITransientVector Number)))
+
 
 ;; `do` is special at the top level, tc-ignore should expand out to `do`
 (tc-ignore
